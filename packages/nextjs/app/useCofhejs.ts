@@ -24,7 +24,27 @@ const ChainEnvironments = {
 } as const;
 
 // ZKV SIGNER
-const zkvSignerPrivateKey = "0x6C8D7F768A6BB4AAFE85E8A2F5A9680355239C7E14646ED62B044E39DE154512";
+/**
+ * Resolves the mock ZK-verifier signer key from the build-time environment.
+ *
+ * This key is used **only** in the local MOCK environment (`mockConfig` below, see
+ * the `ChainEnvironments` map) and it is never needed on mainnet or testnet. It used
+ * to be hardcoded in this file, which meant the published scaffold shipped a private
+ * key to every browser that loaded the app. Configure it with
+ * `NEXT_PUBLIC_MOCK_ZKV_SIGNER_PRIVATE_KEY` and use a throwaway local account.
+ */
+const readMockZkvSignerPrivateKey = (): `0x${string}` | undefined => {
+  const configured = process.env.NEXT_PUBLIC_MOCK_ZKV_SIGNER_PRIVATE_KEY;
+  if (!configured) {
+    console.warn(
+      "NEXT_PUBLIC_MOCK_ZKV_SIGNER_PRIVATE_KEY is not set: mock encrypted-input submission is disabled. " +
+        "Set it to a throwaway local development account to use the MOCK environment."
+    );
+    return undefined;
+  }
+  return configured as `0x${string}`;
+};
+
 function createWalletClientFromPrivateKey(publicClient: PublicClient, privateKey: `0x${string}`): WalletClient {
   const account: PrivateKeyAccount = privateKeyToAccount(privateKey);
   return createWalletClient({
@@ -60,7 +80,12 @@ export function useInitializeCofhejs() {
       const chainId = publicClient?.chain.id;
       const environment = ChainEnvironments[chainId as keyof typeof ChainEnvironments] ?? "TESTNET";
 
-      const viemZkvSigner = createWalletClientFromPrivateKey(publicClient, zkvSignerPrivateKey);
+      // The mock signer is only meaningful in the local MOCK environment. When no key is
+      // configured we omit `mockConfig` entirely instead of falling back to a published key.
+      const mockZkvSignerKey = readMockZkvSignerPrivateKey();
+      const viemZkvSigner = mockZkvSignerKey
+        ? createWalletClientFromPrivateKey(publicClient, mockZkvSignerKey)
+        : undefined;
 
       try {
         const initializationResult = await cofhejs.initializeWithViem({
@@ -74,10 +99,12 @@ export function useInitializeCofhejs() {
           // Hard coded signer for submitting encrypted inputs
           // This is only used in the mock environment to submit the mock encrypted inputs so that they can be used in FHE ops.
           // This has no effect in the mainnet or testnet environments.
-          mockConfig: {
-            decryptDelay: 1000,
-            zkvSigner: viemZkvSigner,
-          },
+          mockConfig: viemZkvSigner
+            ? {
+                decryptDelay: 1000,
+                zkvSigner: viemZkvSigner,
+              }
+            : undefined,
         });
 
         if (initializationResult.success) {
