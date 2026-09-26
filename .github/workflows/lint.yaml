@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+# Least-privilege token scope: this workflow only reads the repository.
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ${{ matrix.os }}
@@ -19,10 +23,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@61b9e3751b92087fd0b06925ba6dd6314e06f089  # master
 
       - name: Setup node env
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610  # v3
         with:
           node-version: ${{ matrix.node }}
           cache: yarn
